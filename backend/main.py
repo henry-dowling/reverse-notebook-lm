@@ -42,18 +42,21 @@ async def main() -> None:
             print_emotions(
                 extract_top_n_emotions(dict(message.models.prosody and message.models.prosody.scores or {}), 3)
             )
+        elif message.type == "user_interruption":
+            # Clear audio queue when user interrupts to prevent overlapping sounds
+            log("User interrupted - clearing audio queue")
+            stream.clear()
         elif message.type == "audio_output":
-            print("henry we got some audio output")
+            log("Received audio output")
             await stream.put(
                 base64.b64decode(message.data.encode("utf-8"))
             )
         elif message.type == "error":
-            print("henry we gotta runtime error LOL")
+            log(f"Error: {message.message}")
             raise RuntimeError(
                 f"Received error message from Hume websocket ({message.code}): {message.message}"
             )
         else:
-            print("henry some crazy shit happened")
             log(f"<{message.type}>")
 
     def on_close() -> None:
@@ -63,7 +66,10 @@ async def main() -> None:
 
 
     async with client.empathic_voice.chat.connect_with_callbacks(
-        options=ChatConnectOptions(config_id=HUME_CONFIG_ID),
+        options=ChatConnectOptions(
+            config_id=HUME_CONFIG_ID,
+            verbose_transcription=True  # Enable faster user speech detection
+        ),
         on_open=lambda: print("WebSocket connection opened."),
         on_message=on_message,
         on_close=on_close,
