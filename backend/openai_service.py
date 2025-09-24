@@ -9,7 +9,7 @@ def write_essay(chat_id: str) -> str:
 
     openai_client = OpenAI()
 
-    response = client.responses.create(
+    response = openai_client.responses.create(
         model="gpt-5",
         input="Write a one-sentence bedtime story about a unicorn."
     )

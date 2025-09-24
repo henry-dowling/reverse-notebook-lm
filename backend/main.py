@@ -57,7 +57,7 @@ async def main() -> None:
             log(f"<{message.type}>")
 
     def on_close() -> None:
-        openai_service.process_chat(chat_id)
+        openai_service.write_essay(chat_id)
         
     stream = Stream.new()
 
