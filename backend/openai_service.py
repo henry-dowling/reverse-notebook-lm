@@ -11,7 +11,7 @@ def write_essay(chat_id: str) -> str:
 
     response = openai_client.responses.create(
         model="gpt-5",
-        input="Write a one-sentence bedtime story about a unicorn."
+        input=f"Generate an essay based on this chat transcript {transcript}"
     )
 
     print(response.output_text)
@@ -35,7 +35,7 @@ def get_chat_transcript_from_hume_id(chat_id: str) -> str:
         if message != None:
             result.append(message)
     
-    print("full transcript is", result)
+    return result
 
 if __name__ == "__main__":
-    get_chat_transcript_from_hume_id("bc646686-4a30-48f4-be69-3364d927791a")
+    write_essay("bc646686-4a30-48f4-be69-3364d927791a")
