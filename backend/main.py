@@ -8,6 +8,7 @@ from hume.client import AsyncHumeClient
 from hume.empathic_voice.chat.socket_client import ChatConnectOptions
 from hume.empathic_voice.chat.types import SubscribeEvent
 import asyncio
+import openai_service
 
 
 def extract_top_n_emotions(emotion_scores: dict, n: int) -> dict:
@@ -28,28 +29,11 @@ async def main() -> None:
     HUME_CONFIG_ID = os.getenv("HUME_CONFIG_ID")
     client = AsyncHumeClient(api_key=HUME_API_KEY)
 
-    async def on_message(message: SubscribeEvent):
-        pass
-
-    stream = Stream.new()
-
-
-    async with client.empathic_voice.chat.connect_with_callbacks(
-        options=ChatConnectOptions(config_id=HUME_CONFIG_ID),
-        on_open=lambda: print("WebSocket connection opened."),
-        on_message=on_message,
-        on_close=lambda: print("WebSocket connection closed."),
-        on_error=lambda err: print(f"Error: {err}")
-    ) as socket:
-        #todo specify microphone device here?
-        await MicrophoneInterface.start(
-            socket,
-            allow_user_interrupt=True,
-            byte_stream=stream
-        )
+    chat_id = ""
 
     async def on_message(message: SubscribeEvent):
         if message.type == "chat_metadata": 
+            chat_id = message.chat_id
             log(
                 f"<{message.type}> Chat ID: {message.chat_id}, Chat Group ID: {message.chat_group_id}"
             )
@@ -71,6 +55,26 @@ async def main() -> None:
         else:
             print("henry some crazy shit happened")
             log(f"<{message.type}>")
+
+    def on_close() -> None:
+        openai_service.process_chat(chat_id)
+        
+    stream = Stream.new()
+
+
+    async with client.empathic_voice.chat.connect_with_callbacks(
+        options=ChatConnectOptions(config_id=HUME_CONFIG_ID),
+        on_open=lambda: print("WebSocket connection opened."),
+        on_message=on_message,
+        on_close=on_close,
+        on_error=lambda err: print(f"Error: {err}")
+    ) as socket:
+        #todo specify microphone device here?
+        await MicrophoneInterface.start(
+            socket,
+            allow_user_interrupt=True,
+            byte_stream=stream
+        )
 
 if __name__ == "__main__":
     asyncio.run(main())
