@@ -1,0 +1,25 @@
+{
+  "name": "Email Writing Workshop",
+  "description": "Craft effective emails through guided practice",
+  "stages": [
+    {
+      "name": "context",
+      "prompt": "Tell me about the email you need to write. What's the situation?",
+      "questions": [
+        "What's your relationship?",
+        "What outcome do you want?",
+        "Any sensitivities?"
+      ]
+    },
+    {
+      "name": "drafting",
+      "prompt": "Let's draft this email together, starting with your key message...",
+      "techniques": [
+        "pyramid_principle",
+        "action_oriented",
+        "empathy_mapping"
+      ]
+    }
+  ],
+  "output_format": "markdown"
+}

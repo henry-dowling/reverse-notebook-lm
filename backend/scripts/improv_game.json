@@ -1,0 +1,26 @@
+{
+  "name": "Yes, And... Improv Game",
+  "description": "Play collaborative storytelling games",
+  "stages": [
+    {
+      "name": "setup",
+      "prompt": "Let's create a story together! I'll start with a scenario, and we'll build on each other's ideas using 'Yes, and...'",
+      "rules": [
+        "Accept what's given",
+        "Add new information",
+        "Keep it flowing"
+      ]
+    },
+    {
+      "name": "play",
+      "prompt": "Remember to build on what I say and add your own twist!",
+      "actions": [
+        "continue_story",
+        "add_character",
+        "introduce_conflict"
+      ]
+    }
+  ],
+  "output_format": "markdown",
+  "save_transcript": true
+}

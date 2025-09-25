@@ -1,0 +1,26 @@
+{
+  "name": "Creative Brainstorming Session",
+  "description": "Generate and develop ideas interactively",
+  "stages": [
+    {
+      "name": "diverge",
+      "prompt": "Let's generate as many ideas as possible. No judgment, just creativity!",
+      "techniques": [
+        "word_association",
+        "reverse_brainstorming",
+        "scamper_method"
+      ]
+    },
+    {
+      "name": "converge",
+      "prompt": "Now let's identify the most promising ideas and develop them further...",
+      "actions": [
+        "rank_ideas",
+        "combine_concepts",
+        "detail_development"
+      ]
+    }
+  ],
+  "output_format": "markdown",
+  "deliverable": "idea_map"
+}
