@@ -1,0 +1,382 @@
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from typing import List, Optional
+import os
+import glob
+from pathlib import Path
+import openai
+import json
+import logging
+from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Setup logging
+LOGGING_DIR = "./logging"
+os.makedirs(LOGGING_DIR, exist_ok=True)
+
+# Configure logging
+log_filename = os.path.join(LOGGING_DIR, f"http_requests_{datetime.now().strftime('%Y%m%d')}.log")
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_filename),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(
+    title="ElevenLabs Tools API",
+    description="API for CRUD operations on markdown files and script retrieval",
+    version="1.0.0"
+)
+
+# HTTP request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = datetime.now()
+    
+    # Log request details
+    client_ip = request.client.host
+    method = request.method
+    url = str(request.url)
+    headers = dict(request.headers)
+    
+    logger.info(f"REQUEST - {method} {url} from {client_ip}")
+    logger.info(f"HEADERS - {headers}")
+    
+    # Process the request
+    response = await call_next(request)
+    
+    # Calculate processing time
+    process_time = (datetime.now() - start_time).total_seconds()
+    
+    # Log response details
+    logger.info(f"RESPONSE - {response.status_code} in {process_time:.4f}s")
+    
+    return response
+
+WORKSPACE_DIR = "./workspace"
+SCRIPTS_DIR = "./scripts"
+
+# Initialize OpenAI client (will use OPENAI_API_KEY environment variable)
+openai_client = openai.OpenAI() if os.getenv("OPENAI_API_KEY") else None
+
+class FileContent(BaseModel):
+    content: str
+
+class LineEdit(BaseModel):
+    line_number: int
+    new_content: str
+
+class FileInfo(BaseModel):
+    filename: str
+    size: int
+    modified: str
+
+class NaturalLanguageEdit(BaseModel):
+    description: str
+
+@app.get("/")
+async def root():
+    return {"message": "ElevenLabs Tools API - Ready to serve!"}
+
+# Markdown file CRUD operations
+@app.get("/workspace/files", response_model=List[str])
+async def list_markdown_files():
+    """List all markdown files in the workspace directory"""
+    try:
+        pattern = os.path.join(WORKSPACE_DIR, "*.md")
+        files = [os.path.basename(f) for f in glob.glob(pattern)]
+        return files
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/workspace/files/{filename}")
+async def read_markdown_file(filename: str):
+    """Read the content of a markdown file"""
+    if not filename.endswith('.md'):
+        filename += '.md'
+    
+    file_path = os.path.join(WORKSPACE_DIR, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return {"filename": filename, "content": content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/workspace/files/{filename}")
+async def create_markdown_file(filename: str, file_content: FileContent):
+    """Create a new markdown file"""
+    if not filename.endswith('.md'):
+        filename += '.md'
+    
+    file_path = os.path.join(WORKSPACE_DIR, filename)
+    
+    if os.path.exists(file_path):
+        raise HTTPException(status_code=400, detail="File already exists")
+    
+    try:
+        os.makedirs(WORKSPACE_DIR, exist_ok=True)
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(file_content.content)
+        return {"message": f"File {filename} created successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/workspace/files/{filename}")
+async def update_markdown_file(filename: str, file_content: FileContent):
+    """Update an existing markdown file"""
+    if not filename.endswith('.md'):
+        filename += '.md'
+    
+    file_path = os.path.join(WORKSPACE_DIR, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(file_content.content)
+        return {"message": f"File {filename} updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/workspace/files/{filename}")
+async def delete_markdown_file(filename: str):
+    """Delete a markdown file"""
+    if not filename.endswith('.md'):
+        filename += '.md'
+    
+    file_path = os.path.join(WORKSPACE_DIR, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    try:
+        os.remove(file_path)
+        return {"message": f"File {filename} deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/workspace/files/{filename}/lines")
+async def get_file_lines(filename: str):
+    """Get all lines of a markdown file with line numbers"""
+    if not filename.endswith('.md'):
+        filename += '.md'
+    
+    file_path = os.path.join(WORKSPACE_DIR, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        numbered_lines = []
+        for i, line in enumerate(lines, 1):
+            numbered_lines.append({"line_number": i, "content": line.rstrip('\n\r')})
+        
+        return {"filename": filename, "lines": numbered_lines}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/workspace/files/{filename}/lines/{line_number}")
+async def edit_line(filename: str, line_number: int, line_edit: LineEdit):
+    """Edit a specific line in a markdown file"""
+    if not filename.endswith('.md'):
+        filename += '.md'
+    
+    file_path = os.path.join(WORKSPACE_DIR, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        if line_number < 1 or line_number > len(lines):
+            raise HTTPException(status_code=400, detail="Line number out of range")
+        
+        lines[line_number - 1] = line_edit.new_content + '\n'
+        
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+        
+        return {"message": f"Line {line_number} updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def apply_natural_language_edit(filename: str, current_content: str, description: str) -> str:
+    """Use LLM to apply natural language edits to file content"""
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="OpenAI API not configured. Please set OPENAI_API_KEY environment variable.")
+    
+    system_prompt = """You are an expert text editor. You will be given the current content of a file and a natural language description of how to edit it. 
+
+Your task is to:
+1. Understand the edit request
+2. Apply the requested changes to the content
+3. Return ONLY the complete modified content (no explanations, no markdown code blocks)
+4. Preserve the original formatting and structure unless the edit request specifically asks to change it
+5. If the edit request is unclear or impossible, return the original content unchanged
+
+Remember: Return ONLY the modified file content, nothing else."""
+
+    user_prompt = f"""Current file content:
+```
+{current_content}
+```
+
+Edit request: {description}
+
+Please apply the requested edit and return the complete modified content."""
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.1,
+            max_tokens=4000
+        )
+        
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM processing error: {str(e)}")
+
+@app.put("/workspace/files/{filename}/edit")
+async def edit_with_description(filename: str, edit_request: NaturalLanguageEdit):
+    """Edit a markdown file using natural language description"""
+    if not filename.endswith('.md'):
+        filename += '.md'
+    
+    file_path = os.path.join(WORKSPACE_DIR, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    try:
+        # Read current content
+        with open(file_path, 'r', encoding='utf-8') as f:
+            current_content = f.read()
+        
+        # Apply natural language edit using LLM
+        modified_content = await apply_natural_language_edit(filename, current_content, edit_request.description)
+        
+        # Write modified content back
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(modified_content)
+        
+        return {
+            "message": f"File {filename} edited successfully using natural language description",
+            "description": edit_request.description,
+            "preview": modified_content[:200] + "..." if len(modified_content) > 200 else modified_content
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Voice agent script operations
+@app.get("/scripts", response_model=List[str])
+async def list_voice_scripts():
+    """List all voice agent instruction scripts in the scripts directory"""
+    try:
+        if not os.path.exists(SCRIPTS_DIR):
+            return []
+        
+        files = []
+        for ext in ['*.txt', '*.md']:
+            pattern = os.path.join(SCRIPTS_DIR, ext)
+            files.extend([os.path.basename(f) for f in glob.glob(pattern)])
+        return files
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/scripts/{filename}")
+async def get_voice_script(filename: str):
+    """Retrieve a specific voice agent instruction script"""
+    file_path = os.path.join(SCRIPTS_DIR, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Voice script not found")
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        file_stat = os.stat(file_path)
+        return {
+            "filename": filename,
+            "content": content,
+            "size": file_stat.st_size,
+            "type": "voice_instruction",
+            "description": "Natural language instructions for voice agent"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/scripts/{filename}")
+async def create_voice_script(filename: str, file_content: FileContent):
+    """Create a new voice agent instruction script"""
+    if not (filename.endswith('.txt') or filename.endswith('.md')):
+        filename += '.txt'
+    
+    file_path = os.path.join(SCRIPTS_DIR, filename)
+    
+    if os.path.exists(file_path):
+        raise HTTPException(status_code=400, detail="Script already exists")
+    
+    try:
+        os.makedirs(SCRIPTS_DIR, exist_ok=True)
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(file_content.content)
+        return {"message": f"Voice script {filename} created successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/scripts/{filename}")
+async def update_voice_script(filename: str, file_content: FileContent):
+    """Update an existing voice agent instruction script"""
+    file_path = os.path.join(SCRIPTS_DIR, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Script not found")
+    
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(file_content.content)
+        return {"message": f"Voice script {filename} updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/scripts/{filename}")
+async def delete_voice_script(filename: str):
+    """Delete a voice agent instruction script"""
+    file_path = os.path.join(SCRIPTS_DIR, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Script not found")
+    
+    try:
+        os.remove(file_path)
+        return {"message": f"Voice script {filename} deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,0 +1,27 @@
+# Voice Agent Requirements
+# Core ElevenLabs dependencies
+elevenlabs>=2.16.0
+
+# HTTP requests for tool integration
+requests>=2.31.0
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# Async support
+asyncio
+
+# JSON handling (built-in, but listed for clarity)
+# json
+
+# Type hints support
+typing-extensions>=4.0.0
+
+# Optional: For enhanced audio processing
+# numpy>=1.24.0
+# scipy>=1.10.0
+
+# Optional: For advanced file operations
+# pathlib (built-in)
+# os (built-in)
+# glob (built-in)

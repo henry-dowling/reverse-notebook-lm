@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import express from 'express';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { RealtimeAgent } from '@openai/agents/realtime';
 import { TwilioRealtimeTransportLayer } from '@openai/agents-extensions';
 import { fileOperationTool } from './tools/fileTool.js';
@@ -10,6 +12,12 @@ const app = express();
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(express.static('public'));
+
+// Basic request logging to help trace gateway activity
+app.use((req, _res, next) => {
+  console.log(`[gateway] ${req.method} ${req.url}`);
+  next();
+});
 
 const PORT = Number(process.env.PORT || 8080);
 const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
@@ -30,6 +38,13 @@ function validateTwilioRequest(req: express.Request): boolean {
 app.post('/twilio/voice', (req, res) => {
   // Optionally validate Twilio signature
   // if (!validateTwilioRequest(req)) return res.status(403).send('Forbidden');
+
+  try {
+    const callSid = req.body?.CallSid;
+    console.log(`[twilio] Voice webhook received${callSid ? ` for CallSid=${callSid}` : ''}`);
+  } catch {
+    console.log('[twilio] Voice webhook received');
+  }
 
   const wsUrl = `${PUBLIC_URL.replace('http', 'ws')}/twilio/stream`;
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -96,8 +111,47 @@ wss.on('connection', async (ws) => {
     websocket: ws,
   });
 
-  // Enhanced system prompt with script information
+  // Log websocket lifecycle to understand cutouts and disconnect causes
+  ws.on('close', (code, reason) => {
+    const reasonText = (() => {
+      try {
+        return reason.toString();
+      } catch {
+        return '';
+      }
+    })();
+    console.log(`[twilio] WebSocket closed code=${code} reason="${reasonText}"`);
+  });
+
+  ws.on('error', (err) => {
+    console.error('[twilio] WebSocket error', err);
+  });
+
+  // Optional: log Twilio start/stop events without dumping audio frames
+  ws.on('message', (data) => {
+    // Twilio sends both JSON events and binary audio frames; try to pick out JSON
+    try {
+      const msg = JSON.parse(typeof data === 'string' ? data : data.toString('utf8'));
+      if (msg?.event) {
+        const eventName = msg.event;
+        if (eventName === 'start' || eventName === 'stop' || eventName === 'mark') {
+          console.log(`[twilio] event=${eventName}${msg?.streamSid ? ` streamSid=${msg.streamSid}` : ''}`);
+        }
+      }
+    } catch {
+      // Ignore non-JSON (likely audio frames)
+    }
+  });
+
+  // Enhanced system prompt with script information and pause/turn-taking guidance
   const instructions = `You are a helpful voice assistant that can guide users through interactive scripts and collaborative activities. You have access to several interactive scripts that provide structured guidance for different activities.
+
+TURN-TAKING AND PAUSE BEHAVIOR:
+- Never interrupt the user if they pause mid-thought. Treat short silences as thinking time.
+- Wait for a comfortable pause before speaking. Default to at least a full beat of silence before responding.
+- If the user sounds reflective, remain quiet until they clearly finish or invite you to speak.
+- If there is a long silence (roughly several seconds), you may briefly check in with a short and gentle prompt like: "Take your time—I'm here when you're ready."
+- When the user starts speaking while you are talking, immediately stop and listen.
 
 Available scripts:
 - blog_writer: Helps create engaging blog posts through conversation
@@ -152,7 +206,9 @@ You can also use the file_operation tool to create and manage markdown files to 
 
   activeAgents.set(crypto.randomUUID(), agent);
   try {
+    console.log('[agent] connecting to OpenAI Realtime...');
     await agent.connect();
+    console.log('[agent] connected');
   } catch (err) {
     console.error('Agent connection error', err);
     ws.close();

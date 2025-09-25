@@ -1,0 +1,11 @@
+version: "2"
+authtoken_from_env: true
+tunnels:
+  mcp-server:
+    proto: http
+    addr: 8000
+    schemes: [https]
+    inspect: false
+    bind_tls: true
+    host_header: localhost:8000
+    subdomain: reverse-notebook-lm-mcp

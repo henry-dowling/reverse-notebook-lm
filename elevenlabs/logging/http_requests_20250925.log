@@ -1,0 +1,29 @@
+2025-09-25 15:27:18,490 - INFO - REQUEST - GET https://allegory.ngrok.app/ from 34.59.11.47
+2025-09-25 15:27:18,490 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'python-httpx/0.28.1', 'accept': 'text/event-stream', 'accept-encoding': 'gzip, deflate, br', 'cache-control': 'no-store', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 15:27:18,491 - INFO - RESPONSE - 200 in 0.0014s
+2025-09-25 15:27:18,534 - INFO - REQUEST - POST https://allegory.ngrok.app/ from 34.59.11.47
+2025-09-25 15:27:18,534 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'python-httpx/0.28.1', 'content-length': '152', 'accept': 'application/json, text/event-stream', 'accept-encoding': 'gzip, deflate, br', 'content-type': 'application/json', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 15:27:18,535 - INFO - RESPONSE - 405 in 0.0011s
+2025-09-25 15:27:51,452 - INFO - REQUEST - POST https://allegory.ngrok.app/ from 34.59.11.47
+2025-09-25 15:27:51,452 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'python-httpx/0.28.1', 'content-length': '152', 'accept': 'application/json, text/event-stream', 'accept-encoding': 'gzip, deflate, br', 'content-type': 'application/json', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 15:27:51,453 - INFO - RESPONSE - 405 in 0.0011s
+2025-09-25 15:27:51,471 - INFO - REQUEST - GET https://allegory.ngrok.app/ from 34.59.11.47
+2025-09-25 15:27:51,471 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'python-httpx/0.28.1', 'accept': 'text/event-stream', 'accept-encoding': 'gzip, deflate, br', 'cache-control': 'no-store', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 15:27:51,473 - INFO - RESPONSE - 200 in 0.0019s
+2025-09-25 15:41:57,254 - INFO - REQUEST - POST https://allegory.ngrok.app/workspace/files/Henry September 2025 essay from 34.59.11.47
+2025-09-25 15:41:57,256 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'ElevenLabs/1.0', 'content-length': '15', 'accept': '*/*', 'accept-encoding': 'gzip, deflate, br', 'content-type': 'application/json', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 15:41:57,265 - INFO - RESPONSE - 200 in 0.0123s
+2025-09-25 15:44:31,437 - INFO - REQUEST - PUT https://allegory.ngrok.app/workspace/files/Henry September 2025 essay.md/edit from 34.59.11.47
+2025-09-25 15:44:31,440 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'ElevenLabs/1.0', 'content-length': '636', 'accept': '*/*', 'accept-encoding': 'gzip, deflate, br', 'content-type': 'application/json', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 15:44:40,075 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-09-25 15:44:40,095 - INFO - RESPONSE - 200 in 8.6579s
+2025-09-25 15:45:59,402 - INFO - REQUEST - PUT https://allegory.ngrok.app/workspace/files/Henry September 2025 essay.md/edit from 34.59.11.47
+2025-09-25 15:45:59,403 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'ElevenLabs/1.0', 'content-length': '68', 'accept': '*/*', 'accept-encoding': 'gzip, deflate, br', 'content-type': 'application/json', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 15:46:08,301 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-09-25 15:46:08,318 - INFO - RESPONSE - 200 in 8.9175s
+2025-09-25 15:51:12,316 - INFO - REQUEST - GET https://allegory.ngrok.app/ from 34.59.11.47
+2025-09-25 15:51:12,317 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'python-httpx/0.28.1', 'accept': 'text/event-stream', 'accept-encoding': 'gzip, deflate, br', 'cache-control': 'no-store', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 15:51:12,319 - INFO - RESPONSE - 200 in 0.0030s
+2025-09-25 15:51:12,327 - INFO - REQUEST - POST https://allegory.ngrok.app/ from 34.59.11.47
+2025-09-25 15:51:12,327 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'python-httpx/0.28.1', 'content-length': '152', 'accept': 'application/json, text/event-stream', 'accept-encoding': 'gzip, deflate, br', 'content-type': 'application/json', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 15:51:12,328 - INFO - RESPONSE - 405 in 0.0006s
