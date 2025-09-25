@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { RealtimeAgent } from '@openai/agents/realtime';
 import { TwilioRealtimeTransportLayer } from '@openai/agents-extensions';
 import { fileOperationTool } from './tools/fileTool.js';
+import { scriptLoadTool, listAvailableScripts } from './tools/scriptTool.js';
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -95,13 +96,56 @@ wss.on('connection', async (ws) => {
     websocket: ws,
   });
 
+  // Enhanced system prompt with script information
+  const instructions = `You are a helpful voice assistant that can guide users through interactive scripts and collaborative activities. You have access to several interactive scripts that provide structured guidance for different activities.
+
+Available scripts:
+- blog_writer: Helps create engaging blog posts through conversation
+- brainstorm_session: Facilitates creative idea generation and development  
+- email_workshop: Guides users in crafting effective emails with proper structure
+- improv_game: Play collaborative storytelling games using "Yes, and..." principles
+- interview_prep: Practice interview scenarios and provide real-time feedback
+
+Use the get_script_info tool to retrieve detailed information about any script, including its stages, prompts, and guidance. This will help you provide structured, script-based assistance to users.
+
+You can also use the file_operation tool to create and manage markdown files to capture content during your interactions.`;
+
   const agent = new RealtimeAgent({
     name: 'Assistant',
-    instructions: 'You are a helpful voice assistant.',
+    instructions: instructions,
     transportLayer: transport,
     tools: {
       file_operation: async (args) => {
         return await fileOperationTool(args as any);
+      },
+      get_script_info: async (args: any) => {
+        try {
+          const result = await scriptLoadTool(args);
+          return {
+            success: true,
+            script: result.script,
+            guidance: result.instructions
+          };
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          };
+        }
+      },
+      list_available_scripts: async () => {
+        try {
+          const scripts = await listAvailableScripts();
+          return {
+            success: true,
+            scripts
+          };
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          };
+        }
       }
     }
   });
