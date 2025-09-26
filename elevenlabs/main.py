@@ -210,6 +210,7 @@ async def list_files():
                 raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
             
             files = google_drive_manager.list_files(file_type="documents")
+            print("henry we are about to return", [{"name": f["name"], "id": f["id"], "type": "google"} for f in files])
             return [{"name": f["name"], "id": f["id"], "type": "google"} for f in files]
         
         else:
@@ -497,8 +498,12 @@ async def edit_with_description(filename: str, edit_request: NaturalLanguageEdit
             # Apply natural language edit using LLM
             modified_content = await apply_natural_language_edit(file_id, current_content, edit_request.description)
 
+            print("henry we just made modified content", modified_content)
+
             # Update the file
             file_info = google_drive_manager.update_file(file_id, modified_content)
+
+            print("henry we edited the google drive manager, here is modified content", modified_content)
 
             return {
                 "message": f"Google Doc edited successfully using natural language description",
@@ -664,32 +669,66 @@ Please provide a comprehensive summary of this document."""
 
 @app.get("/workspace/files/{filename}/summarize")
 async def summarize_document_with_ai_endpoint(filename: str):
-    """Summarize an existing document using AI"""
-    if not filename.endswith('.md'):
-        filename += '.md'
-    
-    file_path = os.path.join(WORKSPACE_DIR, filename)
-    
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    
+    """Summarize an existing document using AI based on current operation mode"""
     try:
-        # Read current content
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        if not content.strip():
-            raise HTTPException(status_code=400, detail="Cannot summarize empty file")
-        
-        # Generate summary using AI
-        summary = await summarize_document_with_ai(filename, content)
-        
-        return {
-            "filename": filename,
-            "summary": summary,
-            "original_length": len(content),
-            "summary_length": len(summary)
-        }
+        if OPERATION_MODE == "local":
+            if not filename.endswith('.md'):
+                filename += '.md'
+
+            file_path = os.path.join(WORKSPACE_DIR, filename)
+
+            if not os.path.exists(file_path):
+                raise HTTPException(status_code=404, detail="File not found")
+
+            # Read current content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            if not content.strip():
+                raise HTTPException(status_code=400, detail="Cannot summarize empty file")
+
+            # Generate summary using AI
+            summary = await summarize_document_with_ai(filename, content)
+
+            return {
+                "filename": filename,
+                "summary": summary,
+                "original_length": len(content),
+                "summary_length": len(summary)
+            }
+
+        elif OPERATION_MODE == "google":
+            if not google_drive_manager or not google_drive_manager.is_authenticated():
+                raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
+
+            # Support either file ID or document title
+            file_id = google_drive_manager.resolve_file_id(filename) if google_drive_manager else None
+            if not file_id:
+                raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+
+            # Get content from Google Drive
+            content = google_drive_manager.get_file_content(file_id)
+
+            if not content.strip():
+                raise HTTPException(status_code=400, detail="Cannot summarize empty file")
+
+            # Generate summary using AI
+            summary = await summarize_document_with_ai(filename, content)
+
+            return {
+                "filename": filename,
+                "file_id": file_id,
+                "summary": summary,
+                "original_length": len(content),
+                "summary_length": len(summary)
+            }
+
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown operation mode: {OPERATION_MODE}")
+
+    except HTTPException:
+        # re-raise explicit HTTP errors
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
