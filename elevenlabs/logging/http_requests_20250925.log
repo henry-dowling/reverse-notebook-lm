@@ -99,3 +99,24 @@
 2025-09-25 18:31:23,286 - INFO - POST / received data: {'method': 'initialize', 'params': {'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'mcp', 'version': '0.1.0'}}, 'jsonrpc': '2.0', 'id': 0}
 2025-09-25 18:31:23,286 - INFO - RESPONSE - 200 in 0.0010s
 2025-09-25 18:31:23,287 - INFO - RESPONSE - 200 in 0.0050s
+2025-09-25 18:38:18,018 - INFO - REQUEST - POST https://allegory.ngrok.app/ from 34.59.11.47
+2025-09-25 18:38:18,018 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'python-httpx/0.28.1', 'content-length': '152', 'accept': 'application/json, text/event-stream', 'accept-encoding': 'gzip, deflate, br', 'content-type': 'application/json', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 18:38:18,019 - INFO - REQUEST - GET https://allegory.ngrok.app/ from 34.59.11.47
+2025-09-25 18:38:18,019 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'python-httpx/0.28.1', 'accept': 'text/event-stream', 'accept-encoding': 'gzip, deflate, br', 'cache-control': 'no-store', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 18:38:18,020 - INFO - RESPONSE - 200 in 0.0011s
+2025-09-25 18:38:18,020 - INFO - POST / received data: {'method': 'initialize', 'params': {'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'mcp', 'version': '0.1.0'}}, 'jsonrpc': '2.0', 'id': 0}
+2025-09-25 18:38:18,020 - INFO - RESPONSE - 200 in 0.0031s
+2025-09-25 18:47:40,085 - INFO - REQUEST - POST https://allegory.ngrok.app/ from 34.59.11.47
+2025-09-25 18:47:40,086 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'python-httpx/0.28.1', 'content-length': '152', 'accept': 'application/json, text/event-stream', 'accept-encoding': 'gzip, deflate, br', 'content-type': 'application/json', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 18:47:40,087 - INFO - POST / received data: {'method': 'initialize', 'params': {'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'mcp', 'version': '0.1.0'}}, 'jsonrpc': '2.0', 'id': 0}
+2025-09-25 18:47:40,087 - INFO - RESPONSE - 200 in 0.0026s
+2025-09-25 18:47:40,100 - INFO - REQUEST - GET https://allegory.ngrok.app/ from 34.59.11.47
+2025-09-25 18:47:40,100 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'python-httpx/0.28.1', 'accept': 'text/event-stream', 'accept-encoding': 'gzip, deflate, br', 'cache-control': 'no-store', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 18:47:40,101 - INFO - RESPONSE - 200 in 0.0005s
+2025-09-25 18:47:58,353 - INFO - REQUEST - GET https://allegory.ngrok.app/ from 34.59.11.47
+2025-09-25 18:47:58,354 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'python-httpx/0.28.1', 'accept': 'text/event-stream', 'accept-encoding': 'gzip, deflate, br', 'cache-control': 'no-store', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 18:47:58,355 - INFO - REQUEST - POST https://allegory.ngrok.app/ from 34.59.11.47
+2025-09-25 18:47:58,355 - INFO - HEADERS - {'host': 'allegory.ngrok.app', 'user-agent': 'python-httpx/0.28.1', 'content-length': '152', 'accept': 'application/json, text/event-stream', 'accept-encoding': 'gzip, deflate, br', 'content-type': 'application/json', 'x-forwarded-for': '34.59.11.47', 'x-forwarded-host': 'allegory.ngrok.app', 'x-forwarded-proto': 'https'}
+2025-09-25 18:47:58,355 - INFO - RESPONSE - 200 in 0.0021s
+2025-09-25 18:47:58,356 - INFO - POST / received data: {'method': 'initialize', 'params': {'protocolVersion': '2025-03-26', 'capabilities': {}, 'clientInfo': {'name': 'mcp', 'version': '0.1.0'}}, 'jsonrpc': '2.0', 'id': 0}
+2025-09-25 18:47:58,356 - INFO - RESPONSE - 200 in 0.0012s

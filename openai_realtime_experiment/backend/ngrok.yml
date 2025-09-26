@@ -1,7 +1,0 @@
-version: "2"
-authtoken: 2nMLXFpIrATnLOjNNVFc0kw1ObK_2G2vPt4uWhhn4Kc7DLjQX
-tunnels:
-  app1:
-    addr: 8000
-    proto: http
-    hostname: allegory.ngrok.app
