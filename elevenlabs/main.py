@@ -531,6 +531,8 @@ Please generate the complete document content based on this description."""
             temperature=0.3,
             max_tokens=4000
         )
+
+        print("henry we have successfully generated essay, response is", response.choices[0].message.content.strip())
         
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -538,30 +540,73 @@ Please generate the complete document content based on this description."""
 
 @app.post("/workspace/files/{filename}/generate")
 async def generate_document_with_description(filename: str, generation_request: DocumentGenerationRequest):
-    """Generate a new document using AI based on plain language description"""
-    if not filename.endswith('.md'):
-        filename += '.md'
-    
-    file_path = os.path.join(WORKSPACE_DIR, filename)
-    
-    if os.path.exists(file_path):
-        raise HTTPException(status_code=400, detail="File already exists. Use PUT /workspace/files/{filename} to update existing files.")
-    
+    """Generate a new document using AI based on plain language description.
+
+    - local mode: creates a new markdown file under workspace
+    - google mode: creates a new Google Doc in the configured Drive folder
+    """
     try:
-        os.makedirs(WORKSPACE_DIR, exist_ok=True)
-        
-        # Generate document content using AI
-        generated_content = await generate_document_with_ai(filename, generation_request.description)
-        
-        # Write generated content to file
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(generated_content)
-        
-        return {
-            "message": f"Document {filename} generated successfully using AI",
-            "description": generation_request.description,
-            "preview": generated_content[:200] + "..." if len(generated_content) > 200 else generated_content
-        }
+        if OPERATION_MODE == "local":
+            if not filename.endswith('.md'):
+                filename += '.md'
+
+            file_path = os.path.join(WORKSPACE_DIR, filename)
+
+            if os.path.exists(file_path):
+                raise HTTPException(status_code=400, detail="File already exists. Use PUT /workspace/files/{filename} to update existing files.")
+
+            os.makedirs(WORKSPACE_DIR, exist_ok=True)
+
+            # Generate document content using AI
+            generated_content = await generate_document_with_ai(filename, generation_request.description)
+
+            # Write generated content to file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(generated_content)
+
+            return {
+                "message": f"Document {filename} generated successfully using AI",
+                "description": generation_request.description,
+                "preview": generated_content[:200] + "..." if len(generated_content) > 200 else generated_content
+            }
+
+        elif OPERATION_MODE == "google":
+            print("henry we make it to 572")
+            if not google_drive_manager or not google_drive_manager.is_authenticated():
+                raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
+
+            # Do not force .md extension for Google Docs; use provided title
+            doc_title = filename
+
+            # Generate document content using AI
+            print("henry we make it to 580",doc_title)
+
+            generated_content = await generate_document_with_ai(doc_title, generation_request.description)
+
+            print("henry generated content is", generated_content)
+
+            # Create Google Doc with generated content
+            file_info = google_drive_manager.create_file(
+                doc_title,
+                generated_content,
+                'application/vnd.google-apps.document'
+            )
+
+            print("henry we make it to file info", file_info)
+
+            return {
+                "message": f"Google Doc {doc_title} generated successfully using AI",
+                "description": generation_request.description,
+                "file_id": file_info.get("id"),
+                "preview": generated_content[:200] + "..." if len(generated_content) > 200 else generated_content
+            }
+
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown operation mode: {OPERATION_MODE}")
+
+    except HTTPException:
+        # re-raise explicit HTTP errors
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
