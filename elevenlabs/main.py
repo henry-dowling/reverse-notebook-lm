@@ -238,11 +238,13 @@ async def read_file(filename: str):
         elif OPERATION_MODE == "google":
             if not google_drive_manager or not google_drive_manager.is_authenticated():
                 raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
-            
-            # In Google mode, filename is actually the file ID
-            file_id = filename
+
+            # Support either file ID or document title
+            file_id = google_drive_manager.resolve_file_id(filename) if google_drive_manager else None
+            if not file_id:
+                raise HTTPException(status_code=404, detail=f"File not found: {filename}")
             content = google_drive_manager.get_file_content(file_id)
-            return {"filename": file_id, "content": content}
+            return {"filename": filename, "file_id": file_id, "content": content}
         
         else:
             raise HTTPException(status_code=400, detail=f"Unknown operation mode: {OPERATION_MODE}")
@@ -271,12 +273,18 @@ async def create_file(filename: str, file_content: FileContent):
         elif OPERATION_MODE == "google":
             if not google_drive_manager or not google_drive_manager.is_authenticated():
                 raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
-            
+
             # Create Google Doc
             file_info = google_drive_manager.create_file(
                 filename, file_content.content, 'application/vnd.google-apps.document'
             )
-            return {"message": f"Google Doc {filename} created successfully", "file_id": file_info["id"]}
+            return {
+                "message": f"Google Doc {filename} created successfully",
+                "created": True,
+                "filename": file_info.get("name", filename),
+                "file_id": file_info.get("id"),
+                "web_url": file_info.get("webViewLink")
+            }
         
         else:
             raise HTTPException(status_code=400, detail=f"Unknown operation mode: {OPERATION_MODE}")
@@ -304,11 +312,13 @@ async def update_file(filename: str, file_content: FileContent):
         elif OPERATION_MODE == "google":
             if not google_drive_manager or not google_drive_manager.is_authenticated():
                 raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
-            
-            # In Google mode, filename is actually the file ID
-            file_id = filename
+
+            # Support either file ID or document title
+            file_id = google_drive_manager.resolve_file_id(filename) if google_drive_manager else None
+            if not file_id:
+                raise HTTPException(status_code=404, detail=f"File not found: {filename}")
             file_info = google_drive_manager.update_file(file_id, file_content.content)
-            return {"message": f"Google Doc updated successfully", "file_id": file_info["id"]}
+            return {"message": f"Google Doc updated successfully", "file_id": file_info["id"], "filename": filename}
         
         else:
             raise HTTPException(status_code=400, detail=f"Unknown operation mode: {OPERATION_MODE}")
@@ -335,12 +345,14 @@ async def delete_file(filename: str):
         elif OPERATION_MODE == "google":
             if not google_drive_manager or not google_drive_manager.is_authenticated():
                 raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
-            
-            # In Google mode, filename is actually the file ID
-            file_id = filename
+
+            # Support either file ID or document title
+            file_id = google_drive_manager.resolve_file_id(filename) if google_drive_manager else None
+            if not file_id:
+                raise HTTPException(status_code=404, detail=f"File not found: {filename}")
             success = google_drive_manager.delete_file(file_id)
             if success:
-                return {"message": f"Google Doc deleted successfully"}
+                return {"message": f"Google Doc deleted successfully", "file_id": file_id, "filename": filename}
             else:
                 raise HTTPException(status_code=500, detail="Failed to delete file")
         
@@ -473,24 +485,27 @@ async def edit_with_description(filename: str, edit_request: NaturalLanguageEdit
         elif OPERATION_MODE == "google":
             if not google_drive_manager or not google_drive_manager.is_authenticated():
                 raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
-            
-            # In Google mode, filename is actually the file ID
-            file_id = filename
-            
+
+            # Support either file ID or document title
+            file_id = google_drive_manager.resolve_file_id(filename) if google_drive_manager else None
+            if not file_id:
+                raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+
             # Get current content
             current_content = google_drive_manager.get_file_content(file_id)
-            
+
             # Apply natural language edit using LLM
             modified_content = await apply_natural_language_edit(file_id, current_content, edit_request.description)
-            
+
             # Update the file
             file_info = google_drive_manager.update_file(file_id, modified_content)
-            
+
             return {
                 "message": f"Google Doc edited successfully using natural language description",
                 "description": edit_request.description,
                 "preview": modified_content[:200] + "..." if len(modified_content) > 200 else modified_content,
-                "file_id": file_info["id"]
+                "file_id": file_info["id"],
+                "filename": filename
             }
         
         else:
@@ -566,12 +581,13 @@ async def generate_document_with_description(filename: str, generation_request: 
 
             return {
                 "message": f"Document {filename} generated successfully using AI",
+                "created": True,
+                "filename": filename,
                 "description": generation_request.description,
                 "preview": generated_content[:200] + "..." if len(generated_content) > 200 else generated_content
             }
 
         elif OPERATION_MODE == "google":
-            print("henry we make it to 572")
             if not google_drive_manager or not google_drive_manager.is_authenticated():
                 raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
 
@@ -579,11 +595,7 @@ async def generate_document_with_description(filename: str, generation_request: 
             doc_title = filename
 
             # Generate document content using AI
-            print("henry we make it to 580",doc_title)
-
             generated_content = await generate_document_with_ai(doc_title, generation_request.description)
-
-            print("henry generated content is", generated_content)
 
             # Create Google Doc with generated content
             file_info = google_drive_manager.create_file(
@@ -592,12 +604,13 @@ async def generate_document_with_description(filename: str, generation_request: 
                 'application/vnd.google-apps.document'
             )
 
-            print("henry we make it to file info", file_info)
-
             return {
                 "message": f"Google Doc {doc_title} generated successfully using AI",
-                "description": generation_request.description,
+                "created": True,
+                "filename": file_info.get("name", doc_title),
                 "file_id": file_info.get("id"),
+                "web_url": file_info.get("webViewLink"),
+                "description": generation_request.description,
                 "preview": generated_content[:200] + "..." if len(generated_content) > 200 else generated_content
             }
 

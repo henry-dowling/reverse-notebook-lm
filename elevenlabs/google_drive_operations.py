@@ -37,6 +37,47 @@ class GoogleDriveManager:
             'https://www.googleapis.com/auth/drive',
             'https://www.googleapis.com/auth/documents'
         ]
+
+    def resolve_file_id(self, identifier: str) -> Optional[str]:
+        """Resolve a Google Drive file ID from an identifier that may be an ID or a title.
+
+        - First, try treating `identifier` as a file ID.
+        - If that fails, search by exact name within the configured folder (if available),
+          otherwise search globally for the first non-trashed match.
+
+        Returns the file ID if found, else None.
+        """
+        if not self.is_authenticated():
+            return None
+
+        # Try as ID first
+        try:
+            _ = self.drive_service.files().get(fileId=identifier, fields='id').execute()
+            return identifier
+        except Exception:
+            pass
+
+        # Fall back to name search
+        try:
+            query_parts = [f"name='{identifier}'", "trashed=false"]
+            if self.folder_id:
+                query_parts.append(f"'{self.folder_id}' in parents")
+            query = " and ".join(query_parts)
+
+            results = self.drive_service.files().list(
+                q=query,
+                pageSize=1,
+                orderBy='modifiedTime desc',
+                fields="files(id, name)"
+            ).execute()
+
+            files = results.get('files', [])
+            if files:
+                return files[0]['id']
+        except HttpError as error:
+            logger.error(f"Error resolving file id for '{identifier}': {error}")
+
+        return None
     
     def load_credentials(self) -> bool:
         """Load saved credentials from file."""
@@ -329,13 +370,22 @@ class GoogleDriveManager:
                         'text': content
                     }
                 }]
-                
+
                 self.docs_service.documents().batchUpdate(
                     documentId=doc_id,
                     body={'requests': requests}
                 ).execute()
-            
-            return {'id': doc_id, 'name': title}
+
+            # Fetch webViewLink for convenience
+            try:
+                meta = self.drive_service.files().get(
+                    fileId=doc_id,
+                    fields='id, name, webViewLink'
+                ).execute()
+            except HttpError:
+                meta = {'id': doc_id, 'name': title}
+
+            return meta
         except HttpError as error:
             logger.error(f"Error creating Google Doc: {error}")
             raise Exception(f"Failed to create Google Doc: {error}")

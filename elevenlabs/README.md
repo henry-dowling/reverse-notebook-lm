@@ -156,6 +156,32 @@ For the remaining 13 tools, each should be added manually in the ElevenLabs UI w
 }
 ```
 
+Response (local mode):
+```json
+{
+  "message": "Document <filename> generated successfully using AI",
+  "created": true,
+  "filename": "<filename>.md",
+  "description": "<original description>",
+  "preview": "<first 200 chars>"
+}
+```
+
+Response (google mode):
+```json
+{
+  "message": "Google Doc <title> generated successfully using AI",
+  "created": true,
+  "filename": "<title>",
+  "file_id": "<google file id>",
+  "web_url": "https://docs.google.com/document/d/...",
+  "description": "<original description>",
+  "preview": "<first 200 chars>"
+}
+```
+
+Note (google mode): Subsequent operations like read/update/delete accept either the Google file ID or the exact document title in the `{filename}` path parameter.
+
 ### 10. Summarize Document with AI
 
 **Name**: Summarize Document with AI  
