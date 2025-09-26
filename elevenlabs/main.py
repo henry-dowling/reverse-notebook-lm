@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import List, Optional
+from contextlib import asynccontextmanager
 import os
 import glob
 from pathlib import Path
@@ -10,6 +11,7 @@ import json
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
+from google_drive_operations import initialize_google_drive_manager, get_google_drive_manager
 
 # Load environment variables from .env file
 load_dotenv()
@@ -30,10 +32,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info(f"Starting ElevenLabs Tools API in {OPERATION_MODE} mode")
+    
+    if OPERATION_MODE == "google" and google_drive_manager:
+        # Try to load existing credentials
+        if google_drive_manager.load_credentials():
+            logger.info("Successfully loaded existing Google credentials")
+        else:
+            logger.warning("No valid Google credentials found. Authentication required.")
+            logger.warning("Visit /auth/google to authenticate with Google Drive")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down ElevenLabs Tools API")
+
 app = FastAPI(
     title="ElevenLabs Tools API",
     description="API for CRUD operations on markdown files and script retrieval",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # HTTP request logging middleware
@@ -67,6 +88,22 @@ SCRIPTS_DIR = "./scripts"
 # Initialize OpenAI client (will use OPENAI_API_KEY environment variable)
 openai_client = openai.OpenAI() if os.getenv("OPENAI_API_KEY") else None
 
+# Configuration
+OPERATION_MODE = os.getenv("OPERATION_MODE", "local").lower()
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/callback")
+
+# Initialize Google Drive manager if in Google mode
+google_drive_manager = None
+if OPERATION_MODE == "google":
+    if not all([GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET]):
+        logger.error("Google mode requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env file")
+    else:
+        google_drive_manager = initialize_google_drive_manager(
+            GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, "caplog"
+        )
+
 class FileContent(BaseModel):
     content: str
 
@@ -90,7 +127,62 @@ class DocumentSummarizationRequest(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"message": "ElevenLabs Tools API - Ready to serve!"}
+    status_info = {"message": "ElevenLabs Tools API - Ready to serve!", "mode": OPERATION_MODE}
+    
+    if OPERATION_MODE == "google":
+        if google_drive_manager and google_drive_manager.is_authenticated():
+            status_info["google_auth"] = "authenticated"
+        else:
+            status_info["google_auth"] = "not_authenticated"
+            status_info["auth_url"] = "/auth/google"
+    
+    return status_info
+
+@app.get("/auth/google")
+async def google_auth():
+    """Initiate Google OAuth flow."""
+    if OPERATION_MODE != "google":
+        raise HTTPException(status_code=400, detail="Google authentication only available in Google mode")
+    
+    if not google_drive_manager:
+        raise HTTPException(status_code=500, detail="Google Drive manager not initialized")
+    
+    try:
+        auth_url = google_drive_manager.get_auth_url()
+        return {"auth_url": auth_url, "message": "Visit this URL to authenticate with Google"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create auth URL: {str(e)}")
+
+@app.get("/auth/callback")
+async def google_auth_callback(code: str):
+    """Handle Google OAuth callback."""
+    if OPERATION_MODE != "google":
+        raise HTTPException(status_code=400, detail="Google authentication only available in Google mode")
+    
+    if not google_drive_manager:
+        raise HTTPException(status_code=500, detail="Google Drive manager not initialized")
+    
+    try:
+        success = google_drive_manager.handle_auth_callback(code)
+        if success:
+            return {"message": "Successfully authenticated with Google Drive and Docs!", "status": "authenticated"}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to authenticate with Google")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Authentication error: {str(e)}")
+
+@app.get("/auth/status")
+async def auth_status():
+    """Check authentication status."""
+    if OPERATION_MODE == "local":
+        return {"mode": "local", "status": "no_auth_required"}
+    elif OPERATION_MODE == "google":
+        if google_drive_manager and google_drive_manager.is_authenticated():
+            return {"mode": "google", "status": "authenticated"}
+        else:
+            return {"mode": "google", "status": "not_authenticated", "auth_url": "/auth/google"}
+    else:
+        return {"mode": OPERATION_MODE, "status": "unknown"}
 
 @app.post("/")
 async def root_post(request: Request):
@@ -103,86 +195,158 @@ async def root_post(request: Request):
         logger.error(f"Error processing POST /: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
-# Markdown file CRUD operations
-@app.get("/workspace/files", response_model=List[str])
-async def list_markdown_files():
-    """List all markdown files in the workspace directory"""
+# File CRUD operations (works with both local files and Google Drive)
+@app.get("/workspace/files")
+async def list_files():
+    """List files based on current operation mode"""
     try:
-        pattern = os.path.join(WORKSPACE_DIR, "*.md")
-        files = [os.path.basename(f) for f in glob.glob(pattern)]
-        return files
+        if OPERATION_MODE == "local":
+            pattern = os.path.join(WORKSPACE_DIR, "*.md")
+            files = [os.path.basename(f) for f in glob.glob(pattern)]
+            return [{"name": f, "type": "local"} for f in files]
+        
+        elif OPERATION_MODE == "google":
+            if not google_drive_manager or not google_drive_manager.is_authenticated():
+                raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
+            
+            files = google_drive_manager.list_files(file_type="documents")
+            return [{"name": f["name"], "id": f["id"], "type": "google"} for f in files]
+        
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown operation mode: {OPERATION_MODE}")
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/workspace/files/{filename}")
-async def read_markdown_file(filename: str):
-    """Read the content of a markdown file"""
-    if not filename.endswith('.md'):
-        filename += '.md'
-    
-    file_path = os.path.join(WORKSPACE_DIR, filename)
-    
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    
+async def read_file(filename: str):
+    """Read the content of a file based on current operation mode"""
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        return {"filename": filename, "content": content}
+        if OPERATION_MODE == "local":
+            if not filename.endswith('.md'):
+                filename += '.md'
+            
+            file_path = os.path.join(WORKSPACE_DIR, filename)
+            
+            if not os.path.exists(file_path):
+                raise HTTPException(status_code=404, detail="File not found")
+            
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return {"filename": filename, "content": content}
+        
+        elif OPERATION_MODE == "google":
+            if not google_drive_manager or not google_drive_manager.is_authenticated():
+                raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
+            
+            # In Google mode, filename is actually the file ID
+            file_id = filename
+            content = google_drive_manager.get_file_content(file_id)
+            return {"filename": file_id, "content": content}
+        
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown operation mode: {OPERATION_MODE}")
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/workspace/files/{filename}")
-async def create_markdown_file(filename: str, file_content: FileContent):
-    """Create a new markdown file"""
-    if not filename.endswith('.md'):
-        filename += '.md'
-    
-    file_path = os.path.join(WORKSPACE_DIR, filename)
-    
-    if os.path.exists(file_path):
-        raise HTTPException(status_code=400, detail="File already exists")
-    
+async def create_file(filename: str, file_content: FileContent):
+    """Create a new file based on current operation mode"""
     try:
-        os.makedirs(WORKSPACE_DIR, exist_ok=True)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(file_content.content)
-        return {"message": f"File {filename} created successfully"}
+        if OPERATION_MODE == "local":
+            if not filename.endswith('.md'):
+                filename += '.md'
+            
+            file_path = os.path.join(WORKSPACE_DIR, filename)
+            
+            if os.path.exists(file_path):
+                raise HTTPException(status_code=400, detail="File already exists")
+            
+            os.makedirs(WORKSPACE_DIR, exist_ok=True)
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(file_content.content)
+            return {"message": f"File {filename} created successfully"}
+        
+        elif OPERATION_MODE == "google":
+            if not google_drive_manager or not google_drive_manager.is_authenticated():
+                raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
+            
+            # Create Google Doc
+            file_info = google_drive_manager.create_file(
+                filename, file_content.content, 'application/vnd.google-apps.document'
+            )
+            return {"message": f"Google Doc {filename} created successfully", "file_id": file_info["id"]}
+        
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown operation mode: {OPERATION_MODE}")
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/workspace/files/{filename}")
-async def update_markdown_file(filename: str, file_content: FileContent):
-    """Update an existing markdown file"""
-    if not filename.endswith('.md'):
-        filename += '.md'
-    
-    file_path = os.path.join(WORKSPACE_DIR, filename)
-    
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    
+async def update_file(filename: str, file_content: FileContent):
+    """Update an existing file based on current operation mode"""
     try:
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(file_content.content)
-        return {"message": f"File {filename} updated successfully"}
+        if OPERATION_MODE == "local":
+            if not filename.endswith('.md'):
+                filename += '.md'
+            
+            file_path = os.path.join(WORKSPACE_DIR, filename)
+            
+            if not os.path.exists(file_path):
+                raise HTTPException(status_code=404, detail="File not found")
+            
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(file_content.content)
+            return {"message": f"File {filename} updated successfully"}
+        
+        elif OPERATION_MODE == "google":
+            if not google_drive_manager or not google_drive_manager.is_authenticated():
+                raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
+            
+            # In Google mode, filename is actually the file ID
+            file_id = filename
+            file_info = google_drive_manager.update_file(file_id, file_content.content)
+            return {"message": f"Google Doc updated successfully", "file_id": file_info["id"]}
+        
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown operation mode: {OPERATION_MODE}")
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/workspace/files/{filename}")
-async def delete_markdown_file(filename: str):
-    """Delete a markdown file"""
-    if not filename.endswith('.md'):
-        filename += '.md'
-    
-    file_path = os.path.join(WORKSPACE_DIR, filename)
-    
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    
+async def delete_file(filename: str):
+    """Delete a file based on current operation mode"""
     try:
-        os.remove(file_path)
-        return {"message": f"File {filename} deleted successfully"}
+        if OPERATION_MODE == "local":
+            if not filename.endswith('.md'):
+                filename += '.md'
+            
+            file_path = os.path.join(WORKSPACE_DIR, filename)
+            
+            if not os.path.exists(file_path):
+                raise HTTPException(status_code=404, detail="File not found")
+            
+            os.remove(file_path)
+            return {"message": f"File {filename} deleted successfully"}
+        
+        elif OPERATION_MODE == "google":
+            if not google_drive_manager or not google_drive_manager.is_authenticated():
+                raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
+            
+            # In Google mode, filename is actually the file ID
+            file_id = filename
+            success = google_drive_manager.delete_file(file_id)
+            if success:
+                return {"message": f"Google Doc deleted successfully"}
+            else:
+                raise HTTPException(status_code=500, detail="Failed to delete file")
+        
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown operation mode: {OPERATION_MODE}")
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -278,32 +442,60 @@ Please apply the requested edit and return the complete modified content."""
 
 @app.put("/workspace/files/{filename}/edit")
 async def edit_with_description(filename: str, edit_request: NaturalLanguageEdit):
-    """Edit a markdown file using natural language description"""
-    if not filename.endswith('.md'):
-        filename += '.md'
-    
-    file_path = os.path.join(WORKSPACE_DIR, filename)
-    
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-    
+    """Edit a file using natural language description based on current operation mode"""
     try:
-        # Read current content
-        with open(file_path, 'r', encoding='utf-8') as f:
-            current_content = f.read()
+        if OPERATION_MODE == "local":
+            if not filename.endswith('.md'):
+                filename += '.md'
+            
+            file_path = os.path.join(WORKSPACE_DIR, filename)
+            
+            if not os.path.exists(file_path):
+                raise HTTPException(status_code=404, detail="File not found")
+            
+            # Read current content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                current_content = f.read()
+            
+            # Apply natural language edit using LLM
+            modified_content = await apply_natural_language_edit(filename, current_content, edit_request.description)
+            
+            # Write modified content back
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(modified_content)
+            
+            return {
+                "message": f"File {filename} edited successfully using natural language description",
+                "description": edit_request.description,
+                "preview": modified_content[:200] + "..." if len(modified_content) > 200 else modified_content
+            }
         
-        # Apply natural language edit using LLM
-        modified_content = await apply_natural_language_edit(filename, current_content, edit_request.description)
+        elif OPERATION_MODE == "google":
+            if not google_drive_manager or not google_drive_manager.is_authenticated():
+                raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
+            
+            # In Google mode, filename is actually the file ID
+            file_id = filename
+            
+            # Get current content
+            current_content = google_drive_manager.get_file_content(file_id)
+            
+            # Apply natural language edit using LLM
+            modified_content = await apply_natural_language_edit(file_id, current_content, edit_request.description)
+            
+            # Update the file
+            file_info = google_drive_manager.update_file(file_id, modified_content)
+            
+            return {
+                "message": f"Google Doc edited successfully using natural language description",
+                "description": edit_request.description,
+                "preview": modified_content[:200] + "..." if len(modified_content) > 200 else modified_content,
+                "file_id": file_info["id"]
+            }
         
-        # Write modified content back
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(modified_content)
-        
-        return {
-            "message": f"File {filename} edited successfully using natural language description",
-            "description": edit_request.description,
-            "preview": modified_content[:200] + "..." if len(modified_content) > 200 else modified_content
-        }
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown operation mode: {OPERATION_MODE}")
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -528,6 +720,7 @@ async def delete_voice_script(filename: str):
         return {"message": f"Voice script {filename} deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn
