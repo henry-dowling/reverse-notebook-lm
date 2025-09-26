@@ -502,6 +502,8 @@ async def edit_with_description(filename: str, edit_request: NaturalLanguageEdit
 
             return {
                 "message": f"Google Doc edited successfully using natural language description",
+                "success": True,
+                "edited": True,
                 "description": edit_request.description,
                 "preview": modified_content[:200] + "..." if len(modified_content) > 200 else modified_content,
                 "file_id": file_info["id"],
@@ -512,6 +514,7 @@ async def edit_with_description(filename: str, edit_request: NaturalLanguageEdit
             raise HTTPException(status_code=400, detail=f"Unknown operation mode: {OPERATION_MODE}")
             
     except Exception as e:
+        logger.error(f"Error in edit_with_description: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 async def generate_document_with_ai(filename: str, description: str) -> str:
@@ -547,8 +550,6 @@ Please generate the complete document content based on this description."""
             max_tokens=4000
         )
 
-        print("henry we have successfully generated essay, response is", response.choices[0].message.content.strip())
-        
         return response.choices[0].message.content.strip()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM processing error: {str(e)}")
