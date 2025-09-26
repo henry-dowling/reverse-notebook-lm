@@ -10,3 +10,5 @@ node_modules/
 google_token.pickle
 oauth_flow.pickle
 **/*.pickle
+
+.DS_Store
