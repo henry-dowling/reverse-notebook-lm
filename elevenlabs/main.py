@@ -82,9 +82,26 @@ class FileInfo(BaseModel):
 class NaturalLanguageEdit(BaseModel):
     description: str
 
+class DocumentGenerationRequest(BaseModel):
+    description: str
+
+class DocumentSummarizationRequest(BaseModel):
+    pass
+
 @app.get("/")
 async def root():
     return {"message": "ElevenLabs Tools API - Ready to serve!"}
+
+@app.post("/")
+async def root_post(request: Request):
+    """Handle POST requests to root endpoint from ElevenLabs"""
+    try:
+        body = await request.json()
+        logger.info(f"POST / received data: {body}")
+        return {"status": "received", "data": body}
+    except Exception as e:
+        logger.error(f"Error processing POST /: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 # Markdown file CRUD operations
 @app.get("/workspace/files", response_model=List[str])
@@ -286,6 +303,141 @@ async def edit_with_description(filename: str, edit_request: NaturalLanguageEdit
             "message": f"File {filename} edited successfully using natural language description",
             "description": edit_request.description,
             "preview": modified_content[:200] + "..." if len(modified_content) > 200 else modified_content
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def generate_document_with_ai(filename: str, description: str) -> str:
+    """Use LLM to generate document content based on description"""
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="OpenAI API not configured. Please set OPENAI_API_KEY environment variable.")
+    
+    system_prompt = """You are an expert technical writer and content creator. You will be given a filename and a plain language description of what the document should contain.
+
+Your task is to:
+1. Understand the document purpose from the filename and description
+2. Create comprehensive, well-structured content that fulfills the description
+3. Use appropriate markdown formatting for the document type
+4. Return ONLY the complete document content (no explanations, no markdown code blocks around the content)
+5. Make the content professional, clear, and useful
+
+Consider the filename extension and context to determine the appropriate format and style."""
+
+    user_prompt = f"""Filename: {filename}
+
+Document description: {description}
+
+Please generate the complete document content based on this description."""
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=4000
+        )
+        
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM processing error: {str(e)}")
+
+@app.post("/workspace/files/{filename}/generate")
+async def generate_document_with_description(filename: str, generation_request: DocumentGenerationRequest):
+    """Generate a new document using AI based on plain language description"""
+    if not filename.endswith('.md'):
+        filename += '.md'
+    
+    file_path = os.path.join(WORKSPACE_DIR, filename)
+    
+    if os.path.exists(file_path):
+        raise HTTPException(status_code=400, detail="File already exists. Use PUT /workspace/files/{filename} to update existing files.")
+    
+    try:
+        os.makedirs(WORKSPACE_DIR, exist_ok=True)
+        
+        # Generate document content using AI
+        generated_content = await generate_document_with_ai(filename, generation_request.description)
+        
+        # Write generated content to file
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(generated_content)
+        
+        return {
+            "message": f"Document {filename} generated successfully using AI",
+            "description": generation_request.description,
+            "preview": generated_content[:200] + "..." if len(generated_content) > 200 else generated_content
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def summarize_document_with_ai(filename: str, content: str) -> str:
+    """Use LLM to summarize document content"""
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="OpenAI API not configured. Please set OPENAI_API_KEY environment variable.")
+    
+    system_prompt = """You are an expert at reading and summarizing documents. You will be given the content of a document and should provide a concise, comprehensive summary.
+
+Your task is to:
+1. Read and understand the document content
+2. Identify the main topics, key points, and important information
+3. Create a well-structured summary that captures the essence of the document
+4. Return ONLY the summary text (no explanations, no markdown code blocks around the content)
+5. Make the summary clear, informative, and proportionate to the original content length
+
+The summary should be much shorter than the original while preserving all critical information."""
+
+    user_prompt = f"""Document filename: {filename}
+
+Document content:
+{content}
+
+Please provide a comprehensive summary of this document."""
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.1,
+            max_tokens=2000
+        )
+        
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM processing error: {str(e)}")
+
+@app.get("/workspace/files/{filename}/summarize")
+async def summarize_document_with_ai_endpoint(filename: str):
+    """Summarize an existing document using AI"""
+    if not filename.endswith('.md'):
+        filename += '.md'
+    
+    file_path = os.path.join(WORKSPACE_DIR, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    try:
+        # Read current content
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        if not content.strip():
+            raise HTTPException(status_code=400, detail="Cannot summarize empty file")
+        
+        # Generate summary using AI
+        summary = await summarize_document_with_ai(filename, content)
+        
+        return {
+            "filename": filename,
+            "summary": summary,
+            "original_length": len(content),
+            "summary_length": len(summary)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

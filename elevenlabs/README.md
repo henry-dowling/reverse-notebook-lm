@@ -33,7 +33,7 @@ The server will start on `http://localhost:8001` locally, but all tool configura
 
 **Quick Start**: Run `python load_tools_to_elevenlabs_sdk.py` to automatically create 2 basic tools (list functions).
 
-For the remaining 11 tools, each should be added manually in the ElevenLabs UI with the following details:
+For the remaining 13 tools, each should be added manually in the ElevenLabs UI with the following details:
 
 ### 1. List Markdown Files
 
@@ -140,7 +140,33 @@ For the remaining 11 tools, each should be added manually in the ElevenLabs UI w
 }
 ```
 
-### 9. List Voice Scripts
+### 9. Generate Document with AI
+
+**Name**: Generate Document with AI  
+**Description**: Generate a new document using AI based on plain language description  
+**Method**: POST  
+**URL**: `https://allegory.ngrok.app/workspace/files/{filename}/generate`  
+**Query Parameters**: None  
+**Path Parameters**:
+- `filename` (string, required): Name of the document file to create  
+**Request Body**:
+```json
+{
+  "description": "string - plain language description of what the document should contain"
+}
+```
+
+### 10. Summarize Document with AI
+
+**Name**: Summarize Document with AI  
+**Description**: Summarize an existing document using AI  
+**Method**: GET  
+**URL**: `https://allegory.ngrok.app/workspace/files/{filename}/summarize`  
+**Query Parameters**: None  
+**Path Parameters**:
+- `filename` (string, required): Name of the document file to summarize
+
+### 11. List Voice Scripts
 
 **Name**: List Voice Scripts  
 **Description**: Get a list of all voice agent instruction script files (.txt, .md) in the scripts directory  
@@ -149,7 +175,7 @@ For the remaining 11 tools, each should be added manually in the ElevenLabs UI w
 **Query Parameters**: None  
 **Path Parameters**: None
 
-### 10. Get Voice Script
+### 12. Get Voice Script
 
 **Name**: Get Voice Script  
 **Description**: Retrieve the content of a specific voice agent instruction script  
@@ -159,7 +185,7 @@ For the remaining 11 tools, each should be added manually in the ElevenLabs UI w
 **Path Parameters**:
 - `filename` (string, required): Name of the script file including extension (.txt or .md)
 
-### 11. Create Voice Script
+### 13. Create Voice Script
 
 **Name**: Create Voice Script  
 **Description**: Create a new voice agent instruction script  
@@ -175,7 +201,7 @@ For the remaining 11 tools, each should be added manually in the ElevenLabs UI w
 }
 ```
 
-### 12. Update Voice Script
+### 14. Update Voice Script
 
 **Name**: Update Voice Script  
 **Description**: Update an existing voice agent instruction script  
@@ -191,7 +217,7 @@ For the remaining 11 tools, each should be added manually in the ElevenLabs UI w
 }
 ```
 
-### 13. Delete Voice Script
+### 15. Delete Voice Script
 
 **Name**: Delete Voice Script  
 **Description**: Delete a voice agent instruction script  
@@ -257,6 +283,25 @@ For the remaining 11 tools, each should be added manually in the ElevenLabs UI w
 }
 ```
 
+**Generate Document Response**:
+```json
+{
+  "message": "Document user-guide.md generated successfully using AI",
+  "description": "Create a comprehensive user guide for our API",
+  "preview": "# User Guide\n\nWelcome to our API! This guide will help you get started with using our service.\n\n## Getting Started\n\n..."
+}
+```
+
+**Document Summary Response**:
+```json
+{
+  "filename": "technical-spec.md",
+  "summary": "This technical specification document outlines the architecture and implementation details for a REST API service. The document covers authentication methods, endpoint definitions, data models, and error handling procedures.",
+  "original_length": 2847,
+  "summary_length": 156
+}
+```
+
 ### Error Responses
 
 ```json
@@ -309,6 +354,14 @@ curl -X PUT "https://allegory.ngrok.app/workspace/files/example.md/lines/1" \
 curl -X PUT "https://allegory.ngrok.app/workspace/files/example.md/edit" \
      -H "Content-Type: application/json" \
      -d '{"description": "Add a new section about installation instructions after the title"}'
+
+# Generate a new document with AI
+curl -X POST "https://allegory.ngrok.app/workspace/files/user-guide.md/generate" \
+     -H "Content-Type: application/json" \
+     -d '{"description": "Create a comprehensive user guide for our API with installation, authentication, and usage examples"}'
+
+# Summarize an existing document with AI
+curl -X GET "https://allegory.ngrok.app/workspace/files/technical-spec.md/summarize"
 
 # List voice scripts
 curl -X GET "https://allegory.ngrok.app/scripts"
